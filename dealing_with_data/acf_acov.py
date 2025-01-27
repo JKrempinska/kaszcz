@@ -9,27 +9,27 @@ from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.arima_process import ArmaProcess, arma_acovf, arma_acf, arma_pacf
 
 
-data = pd.read_csv(r'dealing_with_data\rainfall_data.csv')
-data = data[:23012]
-data["date"] = pd.to_datetime(data["date"])
+data = pd.read_csv('dealing_with_data\powerconsumption.csv')
+data = data[:4465]
 
   
 # drop function which is used in removing or deleting rows or columns from the CSV files 
-data.pop("site") 
-data.pop("rainfall_units") 
-data.pop("lat") 
-data.pop("lon") 
 
-data_test = data[20711:]
-data_train = data[:20711]
 
-data_train = data_train["rainfall"]
 
-periodogram = np.abs(np.fft.fft(data_train))**2 / len(data_train)
-frequencies = np.fft.fftfreq(len(data_train))
+data_train = data["PowerConsumption_Zone1"]
+
+stl_decomposition = STL(data_train, period = 144).fit()
+
+trend_stl = stl_decomposition.trend
+seasonal_stl = stl_decomposition.seasonal
+residual_stl = stl_decomposition.resid
+
+periodogram = np.abs(np.fft.fft(seasonal_stl))**2 / len(seasonal_stl)
+frequencies = np.fft.fftfreq(len(seasonal_stl))
 
 plt.figure(figsize=(10, 5))
-plt.plot(frequencies[:len(data_train) // 2], periodogram[:len(data_train) // 2])
+plt.plot(frequencies[:len(seasonal_stl) // 2], periodogram[:len(seasonal_stl) // 2])
 plt.title('Periodogram')
 plt.xlabel('Frequency')
 plt.ylabel('Power')
@@ -45,11 +45,6 @@ for i in range(len(peaks_frequency)):
     print(f"Peak {i+1}: {peaks_frequency[i]:.4f}, {peaks_period[i]:.2f}")
 
 
-stl_decomposition = STL(data_train, period = 365).fit()
-
-trend_stl = stl_decomposition.trend
-seasonal_stl = stl_decomposition.seasonal
-residual_stl = stl_decomposition.resid
 
 plt.figure(figsize=(10, 5))
 
@@ -88,14 +83,13 @@ adfuller_test(residual_stl + seasonal_stl + trend_stl)
 adfuller_test(residual_stl + trend_stl)
 
 plt.figure(figsize=(10, 3))
-
-# Szum z rozkładu normalnego 
+ 
 
 plt.subplot(2, 1, 1)
 h_max = 50
-ar_coef = np.array(0.1606)
-autokow_teor = arma_acovf([0.1606], [], nobs = h_max, sigma2=34.6092)
-autokow_emp = acovf(data_train, demean=False, fft=False, nlag=h_max)
+ar_coef = np.array([1, 0.9520])
+autokow_teor = arma_acovf(ar_coef, np.array([1]), nobs = h_max, sigma2=6.484e+04)
+autokow_emp = acovf(residual_stl, demean=False, fft=False, nlag=h_max)
 
 plt.stem(autokow_emp, basefmt='')
 plt.plot(autokow_teor, '-', label='Teoretyczna ACVF')
@@ -106,10 +100,10 @@ plt.title('Autokowariancja danych po dekompozycji')
 
 plt.subplot(2, 1, 2)
 
-# Szum z rozkładu t Studenta
 
-autokow_teor_t = arma_acf(ar_coef, [], lags = h_max)
-autokor_emp = acf(data_train, fft=False, nlags=h_max)
+
+autokow_teor_t = arma_acf(ar_coef, np.array([1]), lags = h_max)
+autokor_emp = acf(residual_stl, fft=False, nlags=h_max)
 
 plt.stem(autokor_emp, basefmt='')
 plt.plot(autokow_teor_t, '-', label='Teoretyczna ACVF')
